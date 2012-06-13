@@ -79,34 +79,34 @@ defmodule MessagePack do
     {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
   end
   def decode1(<<0b1001|4, len|4, t|:binary>>) do
-    loop {len, t, []} do
-      {0, m, r} -> {Erlang.lists.reverse(r), m}
-      {n, b, a} -> 
-	{d1, b1} = decode1(b)
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a -> 
+	{d1, b1} = decode1(t)
 	recur n-1, b1, [d1|a]
     end
   end
   def decode1(<<0xdc|8, len|16, t|:binary>>) do
-    loop {len, t, []} do
-      {0, m, r} -> {Erlang.lists.reverse(r), m}
-      {n, b, a} -> 
-	{d1, b1} = decode1(b)
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a -> 
+	{d1, b1} = decode1(t)
 	recur n-1, b1, [d1|a]
     end
   end
   def decode1(<<0xdd|8, len|32, t|:binary>>) do
-    loop {len, t, []} do
-      {0, m, r} -> {Erlang.lists.reverse(r), m}
-      {n, b, a} -> 
-	{d1, b1} = decode1(b)
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a -> 
+	{d1, b1} = decode1(t)
 	recur n-1, b1, [d1|a]
     end
   end
   def decode1(<<0b1000|4, len|4, t|:binary>>) do
-    loop {len, t, []} do
-      {0, m, r} -> {Erlang.lists.reverse(r), m}
-      {n, b, a} ->
-	{k1, ret1} = decode1(b)
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a ->
+	{k1, ret1} = decode1(t)
 	{v1, ret2} = decode1(ret1)
 	recur n - 1, ret2, [{k1, v1}| a]
     end
