@@ -1,16 +1,44 @@
+
+defmodule MessagePack.Macro do
+  import Bitwise
+  defmacro defencode_int(bit, prefix, prefixbit) do
+    quote do
+      def encode(i) when is_integer(i) and i >= 0 and i < bsl(1, unquote(bit)) do
+	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
+      end
+    end
+  end
+  defmacro defencode_bin(bit, prefix, prefixbit) do
+    quote do
+      def encode(i) when is_binary(i) and size(i) < bsl(1, unquote(bit)) do
+	<< unquote(prefix) | unquote(prefixbit), size(i) | unquote(bit) >> <> i
+      end
+    end
+  end
+  defmacro defencode_list(bit, prefix, prefixbit) do
+    quote do
+      defp encode_list(i) when is_list(i) and length(i) < bsl(1, unquote(bit)) do
+	<< unquote(prefix) | unquote(prefixbit), length(i) | unquote(bit) >> <>
+	  list_to_binary(Enum.map i, fn(n) -> encode(n) end)
+      end
+    end
+  end
+end
 defmodule MessagePack do
-  def encode(i) when is_integer(i) and i >= 0 and i <= 127, do: <<0|1,i|7>>
+  import Bitwise
+  import MessagePack.Macro
+  defencode_int(7, 0, 1)
+  defencode_int(8, 0xcc, 8)
+  defencode_int(16, 0xcd, 8)
+  defencode_int(32, 0xce, 8)
+  defencode_int(64, 0xcf, 8)
   def encode(i) when is_integer(i) and i >= -32 and i <= -1, do:  <<0b111|3,i|5>>
-  def encode(i) when is_integer(i) and i >= 0 and i <= 0x0ff, do:  <<0xcc|8,i|8>>
-  def encode(i) when is_integer(i) and i >= 0 and i <= 0x0ffff, do: <<0xcd|8, i|16>>
-  def encode(i) when is_integer(i) and i >= 0 and i <= 0x0ffffffff, do: <<0xce|8, i|32>>
-  def encode(i) when is_integer(i) and i >= 0 and i <= 0x0ffffffffffff,  do: <<0xcf|8, i|64>>
   def encode(i) when i == nil, do: <<0xc0>>
   def encode(i) when is_boolean(i) and i == true, do: <<0xc3>>
   def encode(i) when is_boolean(i) and i == false, do: <<0xc2>>
-  def encode(i) when is_binary(i) and size(i) <= 31, do: <<0b101|3, size(i)|5>> <> i
-  def encode(i) when is_binary(i) and size(i) <= 0x0ffff, do: <<0xda|8, size(i)|16>> <> i
-  def encode(i) when is_binary(i) and size(i) <= 0x0ffffffff, do: <<0xdb|8, size(i)|32>> <> i
+  defencode_bin(5, 0b101, 3)
+  defencode_bin(16, 0xda, 8)
+  defencode_bin(32, 0xdb, 8)
   def encode(i) when is_list(i) do
    if (length(Keyword.keys(i)) == length(i)) do
       encode_kv(i)
@@ -18,15 +46,9 @@ defmodule MessagePack do
       encode_list(i)
     end
   end
-  def encode_list(i) when is_list(i) and length(i) <= 15 do
-    <<0b1001|4, length(i)|4>> <> list_to_binary(Enum.map i, fn(n) -> encode(n) end)
-  end
-  def encode_list(i) when is_list(i) and length(i) <= 0x0ffff do
-    <<0xdc|8, length(i)|16>> <> list_to_binary(Enum.map i, fn(n) -> encode(n) end)
-  end
-  def encode_list(i) when is_list(i) and length(i) <= 0x0ffffffff do
-    <<0xdd|8, length(i)|32>> <> list_to_binary(Enum.map i, fn(n) -> encode(n) end)
-  end
+  defencode_list(4, 0b1001, 4)
+  defencode_list(16, 0xdc, 8)
+  defencode_list(32, 0xdd, 8)
   def encode_kv(i) when length(i) <= 15 do
     <<0b1000|4, length(i)|4>> <> list_to_binary(Enum.map i, fn({k,v}) -> encode(k) <> encode(v) end)
   end
@@ -43,7 +65,7 @@ defmodule MessagePack do
     {i, t}
   end
   def decode1(<<0b111|3,i|5,t|:binary>>) do
-    {-i, t}
+    {i - 32, t}
   end
   def decode1(<<0xcc, i|8, t|:binary>>) do
     {i, t}
@@ -70,11 +92,11 @@ defmodule MessagePack do
     len = size(t)
     {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
   end
-  def decode1(<<0xda|8, n|8, t|:binary>>) do
+  def decode1(<<0xda|8, n|16, t|:binary>>) do
     len = size(t)
     {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
   end
-  def decode1(<<0xdb|8, n|8, t|:binary>>) do
+  def decode1(<<0xdb|8, n|32, t|:binary>>) do
     len = size(t)
     {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
   end
