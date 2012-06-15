@@ -31,7 +31,48 @@ defmodule MessagePack.Macro do
       end
     end
   end
+  defmacro defdecode_uint(bit, prefix, prefixbit) do
+    quote do
+      def decode1(<<unquote(prefix)|unquote(prefixbit), i|unquote(bit),t|:binary>>) do
+	{i, t}
+      end
+    end
+  end
+  defmacro defdecode_bin(bit, prefix, prefixbit) do
+    quote do
+      def decode1(<<unquote(prefix)|unquote(prefixbit), n|unquote(bit), t|:binary>>) do
+	len = size(t)
+	{:binary.part(t, 0, n), :binary.part(t, len, n - len)}
+      end
+    end
+  end
+  defmacro defdecode_list(bit, prefix, prefixbit) do
+    quote do
+      def decode1(<<unquote(prefix)|unquote(prefixbit), len|unquote(bit), t|:binary>>) do
+	loop len, t, [] do
+	  0, t, a -> {:lists.reverse(a), t}
+	  n, t, a -> 
+	    {d1, b1} = decode1(t)
+	    recur n - 1, b1, [d1 | a]
+	end
+      end
+    end
+  end
+  defmacro defdecode_map(bit, prefix, prefixbit) do
+    quote do
+      def decode1(<<unquote(prefix) | unquote(prefixbit), len|unquote(bit), t|:binary>>) do
+	loop len, t, [] do
+	  0, t, a -> {:lists.reverse(a), t}
+	  n, t, a ->
+	    {k1, ret1} = decode1(t)
+	    {v1, ret2} = decode1(ret1)
+	    recur n - 1, ret2, [{k1, v1}|a]
+	end
+      end
+    end
+  end
 end
+
 defmodule MessagePack do
   import Bitwise
   import MessagePack.Macro
@@ -60,98 +101,25 @@ defmodule MessagePack do
   defencode_kv(4, 0b1000, 4)
   defencode_kv(16, 0xde, 8)
   defencode_kv(32, 0xdf, 8)
-
   def decode1("") do
     []
   end
-  def decode1(<<0b0|1,i|7,t|:binary>>) do
-    {i, t}
-  end
-  def decode1(<<0b111|3,i|5,t|:binary>>) do
-    {i - 32, t}
-  end
-  def decode1(<<0xcc, i|8, t|:binary>>) do
-    {i, t}
-  end
-  def decode1(<<0xcd, i|16, t|:binary>>) do
-    {i, t}
-  end
-  def decode1(<<0xce, i|32, t|:binary>>) do
-    {i, t}
-  end
-  def decode1(<<0xcf, i|64, t|:binary>>) do
-    {i, t}
-  end
-  def decode1(<<0xc0, t|:binary>>) do
-    {nil, t}
-  end
-  def decode1(<<0xc3, t|:binary>>) do
-    {true, t}
-  end
-  def decode1(<<0xc2, t|:binary>>) do
-    {false, t}
-  end
-  def decode1(<<0b101|3,n|5, t|:binary>>) do
-    len = size(t)
-    {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
-  end
-  def decode1(<<0xda|8, n|16, t|:binary>>) do
-    len = size(t)
-    {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
-  end
-  def decode1(<<0xdb|8, n|32, t|:binary>>) do
-    len = size(t)
-    {Erlang.binary.part(t, 0, n), Erlang.binary.part(t, len, n - len)}
-  end
-  def decode1(<<0b1001|4, len|4, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a -> 
-	{d1, b1} = decode1(t)
-	recur n-1, b1, [d1|a]
-    end
-  end
-  def decode1(<<0xdc|8, len|16, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a -> 
-	{d1, b1} = decode1(t)
-	recur n-1, b1, [d1|a]
-    end
-  end
-  def decode1(<<0xdd|8, len|32, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a -> 
-	{d1, b1} = decode1(t)
-	recur n-1, b1, [d1|a]
-    end
-  end
-  def decode1(<<0b1000|4, len|4, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a ->
-	{k1, ret1} = decode1(t)
-	{v1, ret2} = decode1(ret1)
-	recur n - 1, ret2, [{k1, v1}| a]
-    end
-  end
-  def decode1(<<0xde|8, len|16, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a ->
-	{k1, ret1} = decode1(t)
-	{v1, ret2} = decode1(ret1)
-	recur n - 1, ret2, [{k1, v1}| a]
-    end
-  end
-  def decode1(<<0xdf|8, len|32, t|:binary>>) do
-    loop len, t, [] do
-      0, t, a -> {Erlang.lists.reverse(a), t}
-      n, t, a ->
-	{k1, ret1} = decode1(t)
-	{v1, ret2} = decode1(ret1)
-	recur n - 1, ret2, [{k1, v1}| a]
-    end
-  end
+  defdecode_uint(7, 0b0, 1)
+  defdecode_uint(8, 0xcc, 8)
+  defdecode_uint(16, 0xcd, 8)
+  defdecode_uint(32, 0xce, 8)
+  defdecode_uint(64, 0xcf, 8)
+  def decode1(<<0b111|3,i|5,t|:binary>>), do: {i - 32, t}
+  def decode1(<<0xc0, t|:binary>>), do: {nil, t}
+  def decode1(<<0xc3, t|:binary>>), do: {true, t}
+  def decode1(<<0xc2, t|:binary>>), do: {false, t}
+  defdecode_bin(5, 0b101, 3)
+  defdecode_bin(16, 0xda, 8)
+  defdecode_bin(32, 0xdb, 8)
+  defdecode_list(4, 0b1001, 4)
+  defdecode_list(16, 0xdc, 8)
+  defdecode_list(32, 0xdd, 8)
+  defdecode_map(4, 0b1000, 4)
+  defdecode_map(16, 0xde, 8)
+  defdecode_map(32, 0xdf, 8)
 end

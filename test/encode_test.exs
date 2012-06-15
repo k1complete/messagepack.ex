@@ -28,6 +28,11 @@ defmodule EncodeTest do
       assert {i, ""} == decode1(encode(i))
     end
   end
+end
+
+defmodule BinTestmmm do
+  use ExUnit.Case
+  import MessagePack
   test :bin5 do
     i = "12345678901234567890"
     assert {i, ""} == decode1(encode(i))
@@ -53,12 +58,11 @@ defmodule EncodeTest do
     assert {i, ""} == decode1(encode(i))
   end
   test :map16 do
-    i = [{"a", 1}, {"ab", 2}, {"abc", 3},
-         {"b", 1}, {"bb", 2}, {"bbc", 3},
-         {"c", 1}, {"cbb", 2}, {"cbbc", 3},
-         {"d", 1}, {"dbb", 2}, {"dbbc", 3},
-         {"e", 1}, {"ebb", 2}, {"ebbc", 3},
-         {"f", 1}, {"fbb", 2}, {"fbbc", 3}]
+    i = lc j inlist :lists.seq(0, 257), do: {"#{j}", j}
+    assert {i, ""} == decode1(encode(i))
+  end
+  test :map32 do
+    i = lc j inlist :lists.seq(0, 65537), do: {"#{j}", j}
     assert {i, ""} == decode1(encode(i))
   end
 end
