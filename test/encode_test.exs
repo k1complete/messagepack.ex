@@ -48,4 +48,17 @@ defmodule EncodeTest do
     i = :lists.seq(0,65536)
     assert {i, ""} == decode1(encode(i))
   end
+  test :map4 do
+    i = [{"a", 1}, {"ab", 2}, {"abc", 3}]
+    assert {i, ""} == decode1(encode(i))
+  end
+  test :map16 do
+    i = [{"a", 1}, {"ab", 2}, {"abc", 3},
+         {"b", 1}, {"bb", 2}, {"bbc", 3},
+         {"c", 1}, {"cbb", 2}, {"cbbc", 3},
+         {"d", 1}, {"dbb", 2}, {"dbbc", 3},
+         {"e", 1}, {"ebb", 2}, {"ebbc", 3},
+         {"f", 1}, {"fbb", 2}, {"fbbc", 3}]
+    assert {i, ""} == decode1(encode(i))
+  end
 end

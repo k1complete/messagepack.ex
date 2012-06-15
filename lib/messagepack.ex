@@ -23,6 +23,14 @@ defmodule MessagePack.Macro do
       end
     end
   end
+  defmacro defencode_kv(bit, prefix, prefixbit) do
+    quote do
+      defp encode_kv(i) when length(i) < bsl(1, unquote(bit)) do
+	<< unquote(prefix) | unquote(prefixbit), length(i) | unquote(bit) >> <>
+	  list_to_binary(Enum.map i, fn({k, v}) -> encode(k) <> encode(v) end)
+      end
+    end
+  end
 end
 defmodule MessagePack do
   import Bitwise
@@ -49,15 +57,10 @@ defmodule MessagePack do
   defencode_list(4, 0b1001, 4)
   defencode_list(16, 0xdc, 8)
   defencode_list(32, 0xdd, 8)
-  def encode_kv(i) when length(i) <= 15 do
-    <<0b1000|4, length(i)|4>> <> list_to_binary(Enum.map i, fn({k,v}) -> encode(k) <> encode(v) end)
-  end
-  def encode_kv(i) when length(i) <= 0x0ffff do
-    <<0xde|8, length(i)|16>> <> list_to_binary(Enum.map i, fn({k,v}) -> encode(k) <> encode(v) end)
-  end
-  def encode_kv(i) when length(i) <= 0x0ffffffff do
-    <<0xdf|8, length(i)|32>> <> list_to_binary(Enum.map i, fn({k,v}) -> encode(k) <> encode(v) end)
-  end
+  defencode_kv(4, 0b1000, 4)
+  defencode_kv(16, 0xde, 8)
+  defencode_kv(32, 0xdf, 8)
+
   def decode1("") do
     []
   end
@@ -125,6 +128,24 @@ defmodule MessagePack do
     end
   end
   def decode1(<<0b1000|4, len|4, t|:binary>>) do
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a ->
+	{k1, ret1} = decode1(t)
+	{v1, ret2} = decode1(ret1)
+	recur n - 1, ret2, [{k1, v1}| a]
+    end
+  end
+  def decode1(<<0xde|8, len|16, t|:binary>>) do
+    loop len, t, [] do
+      0, t, a -> {Erlang.lists.reverse(a), t}
+      n, t, a ->
+	{k1, ret1} = decode1(t)
+	{v1, ret2} = decode1(ret1)
+	recur n - 1, ret2, [{k1, v1}| a]
+    end
+  end
+  def decode1(<<0xdf|8, len|32, t|:binary>>) do
     loop len, t, [] do
       0, t, a -> {Erlang.lists.reverse(a), t}
       n, t, a ->
