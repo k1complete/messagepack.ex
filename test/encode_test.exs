@@ -14,12 +14,12 @@ defmodule EncodeTest do
     end
   end
   test :u_int8 do
-    lc i inlist :lists.seq(0, 255) do
+    lc i inlist [0,1,126,127,128,129,254,255] do
       assert {i, ""} == decode1(encode(i))
     end
   end
   test :u_int16 do
-    lc i inlist :lists.seq(0, 0xffff) do
+    lc i inlist [0,1,254,255,256,257,65534,65535] do
       assert {i, ""} == decode1(encode(i))
     end
   end

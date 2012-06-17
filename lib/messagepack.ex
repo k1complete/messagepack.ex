@@ -2,6 +2,15 @@
 defmodule MessagePack.Macro do
   import Bitwise
   defmacro defencode_int(bit, prefix, prefixbit) do
+    min = - bsl(1, bit-1) + 1
+    max =   bsl(1, bit-1)
+    quote do
+      def encode(i) when is_integer(i) and unquote(min) <= i and i < unquote(max) do
+	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
+      end
+    end
+  end
+  defmacro defencode_uint(bit, prefix, prefixbit) do
     quote do
       def encode(i) when is_integer(i) and i >= 0 and i < bsl(1, unquote(bit)) do
 	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
@@ -28,6 +37,16 @@ defmodule MessagePack.Macro do
       defp encode_kv(i) when length(i) < bsl(1, unquote(bit)) do
 	<< unquote(prefix) | unquote(prefixbit), length(i) | unquote(bit) >> <>
 	  list_to_binary(Enum.map i, fn({k, v}) -> encode(k) <> encode(v) end)
+      end
+    end
+  end
+  defmacro defdecode_int(bit, prefix, prefixbit) do
+    quote do
+      def decode1(<<unquote(prefix)|unquote(prefixbit), i|unquote(bit),t|:binary>>) do
+	th = bsl(1, unquote(bit) - 1)
+	max = bsl(1, unquote(bit))
+	ret = if (th <= i), do: i-max, else: i
+	{ret, t}
       end
     end
   end
@@ -76,12 +95,17 @@ end
 defmodule MessagePack do
   import Bitwise
   import MessagePack.Macro
-  defencode_int(7, 0, 1)
-  defencode_int(8, 0xcc, 8)
-  defencode_int(16, 0xcd, 8)
-  defencode_int(32, 0xce, 8)
-  defencode_int(64, 0xcf, 8)
+  defencode_uint(7, 0, 1)
   def encode(i) when is_integer(i) and i >= -32 and i <= -1, do:  <<0b111|3,i|5>>
+  defencode_int(8, 0xd0, 8)
+  defencode_int(16, 0xd1, 8)
+  defencode_int(32, 0xd2, 8)
+  defencode_int(64, 0xd3, 8)
+
+  defencode_uint(8, 0xcc, 8)
+  defencode_uint(16, 0xcd, 8)
+  defencode_uint(32, 0xce, 8)
+  defencode_uint(64, 0xcf, 8)
   def encode(i) when i == nil, do: <<0xc0>>
   def encode(i) when is_boolean(i) and i == true, do: <<0xc3>>
   def encode(i) when is_boolean(i) and i == false, do: <<0xc2>>
@@ -105,6 +129,10 @@ defmodule MessagePack do
     []
   end
   defdecode_uint(7, 0b0, 1)
+  defdecode_int(8, 0xd0, 8)
+  defdecode_int(16, 0xd1, 8)
+  defdecode_int(32, 0xd2, 8)
+  defdecode_int(64, 0xd3, 8)
   defdecode_uint(8, 0xcc, 8)
   defdecode_uint(16, 0xcd, 8)
   defdecode_uint(32, 0xce, 8)
