@@ -1,44 +1,50 @@
 
 defmodule MessagePack.Macro do
   import Bitwise
+  def build_fix(bit, prefix, prefixbit, [guard: g]) do
+    quote do
+      def encode(i) when unquote(g) do
+	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
+      end
+    end
+  end
+  def build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t, name: n]) do
+    quote do
+      def unquote(n).(i) when unquote(g) do
+	<< unquote(prefix) | unquote(prefixbit), unquote(s) | unquote(bit) >> <> unquote(t)
+      end
+    end
+  end
+  def build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t]) do
+    build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t, name: :encode])
+  end
   defmacro defencode_int(bit, prefix, prefixbit) do
     min = - bsl(1, bit-1) + 1
     max =   bsl(1, bit-1)
-    quote do
-      def encode(i) when is_integer(i) and unquote(min) <= i and i < unquote(max) do
-	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
-      end
-    end
+    g = quote do: is_integer(i) and unquote(min) <= i and i < unquote(max) 
+    build_fix(bit, prefix, prefixbit, [guard: g])
   end
   defmacro defencode_uint(bit, prefix, prefixbit) do
-    quote do
-      def encode(i) when is_integer(i) and i >= 0 and i < bsl(1, unquote(bit)) do
-	<< unquote(prefix) | unquote(prefixbit), i | unquote(bit) >>
-      end
-    end
+    g = quote do: is_integer(i) and i >= 0 and i < bsl(1, unquote(bit))
+    build_fix(bit, prefix, prefixbit, [guard: g])
   end
   defmacro defencode_bin(bit, prefix, prefixbit) do
-    quote do
-      def encode(i) when is_binary(i) and size(i) < bsl(1, unquote(bit)) do
-	<< unquote(prefix) | unquote(prefixbit), size(i) | unquote(bit) >> <> i
-      end
-    end
+    g = quote do: is_binary(i) and size(i) < bsl(1, unquote(bit))
+    t = quote do: i
+    s = quote do: size(i)
+    build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t])
   end
   defmacro defencode_list(bit, prefix, prefixbit) do
-    quote do
-      defp encode_list(i) when is_list(i) and length(i) < bsl(1, unquote(bit)) do
-	<< unquote(prefix) | unquote(prefixbit), length(i) | unquote(bit) >> <>
-	  list_to_binary(Enum.map i, fn(n) -> encode(n) end)
-      end
-    end
+    g = quote do: is_list(i) and length(i) < bsl(1, unquote(bit))
+    t = quote do: list_to_binary(Enum.map i, fn(n) -> encode(n) end)
+    s = quote do: length(i)
+    build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t, name: :encode_list])
   end
   defmacro defencode_kv(bit, prefix, prefixbit) do
-    quote do
-      defp encode_kv(i) when length(i) < bsl(1, unquote(bit)) do
-	<< unquote(prefix) | unquote(prefixbit), length(i) | unquote(bit) >> <>
-	  list_to_binary(Enum.map i, fn({k, v}) -> encode(k) <> encode(v) end)
-      end
-    end
+    g = quote do: is_list(i) and length(i) < bsl(1, unquote(bit))
+    t = quote do: list_to_binary(Enum.map i, fn({k,v}) -> encode(k) <> encode(v) end)
+    s = quote do: length(i)
+    build_tlv(bit, prefix, prefixbit, [guard: g, size: s, tail: t, name: :encode_kv])
   end
   defmacro defdecode_int(bit, prefix, prefixbit) do
     quote do
